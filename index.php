@@ -33,6 +33,6 @@ require_once("games.php");
 if(isset($path[0])) {
     if($path[0]=="games") {
         $games = new Games($path);
-        echo $games->show($path);
+        echo $games->makePage($path);
     }
 }

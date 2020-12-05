@@ -1,5 +1,7 @@
 ==== games ====
 improve list for genre
+list for each category
+check for results in requests
 want list
 
 ==== content ====
