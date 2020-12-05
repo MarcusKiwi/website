@@ -1,0 +1,15 @@
+==== games ====
+list for genre
+list for console
+list for developer
+list for publisher
+want list
+console order field
+console description field
+
+==== content ====
+system specs
+diecast cars
+
+==== site ====
+page routing
