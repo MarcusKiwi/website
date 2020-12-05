@@ -9,16 +9,16 @@ class Games {
     }
 
     public function show($path) {
-        if(count($path)>2) {
+        if(count($path)==2) {
+            return $this->showGame($path[1]);
+        }
+        if(count($path)==3) {
             switch($path[1]) {
-                case "game":
-                    return $this->showGame($path[2]);
+                case "series":
                 case "developer":
-                    return $this->listDeveloper($path[2]);
                 case "publisher":
-                    return $this->listPublisher($path[2]);
                 case "console":
-                    return $this->listConsole($path[2]);
+                    return $this->listCategory($path[1], $path[2]);
                 case "genre":
                     return $this->listGenre($path[2]);
             }
@@ -40,8 +40,7 @@ class Games {
             games.series.name AS `series_name`,
             games.developer.name AS `developer_name`,
             games.publisher.name AS `publisher_name`,
-            games.console.name_short AS `console_name_short`,
-            games.console.name_long AS `console_name_long`,
+            games.console.name AS `console_name`,
             genre_pri.name1 AS `genre_pri_name1`,
             genre_pri.name2 AS `genre_pri_name2`,
             genre_sec.name1 AS `genre_sec_name1`,
@@ -81,97 +80,45 @@ class Games {
         $o .= '<tr><td>Series</td><td><a href="/games/series/'.$game['series_name'].'/">'.$game['series_name'].'</a></td></tr>';
         $o .= '<tr><td>Developer</td><td><a href="/games/developer/'.$game['developer_name'].'/">'.$game['developer_name'].'</td></tr>';
         $o .= '<tr><td>Publisher </td><td><a href="/games/publisher/'.$game['publisher_name'].'/">'.$game['publisher_name'].'</td></tr>';
-        $o .= '<tr><td>Console</td><td><a href="/games/console/'.$game['console_name_short'].'/">'.$game['console_name_long'].'</td></tr>';
+        $o .= '<tr><td>Console</td><td><a href="/games/console/'.$game['console_name'].'/">'.$game['console_name'].'</td></tr>';
         $o .= '</table>';
         $o .= '<p>About: '.$game['description_public'].'</p>';
         return $o;
     }
 
-    private function listDeveloper($developer) {
-        // query
-        $stmt = $this->database->get()->prepare("
-            SELECT
-            console.name_long AS `console`,
-            games.id,
-            games.name_sort,
-            games.name_nice
-            FROM games.games
-            JOIN games.console ON console.id = games.console_id
-            JOIN games.developer ON developer.id = games.developer_id
-            WHERE games.have_game = 1 AND developer.name = :developer
-            ORDER BY console.id, games.name_sort
-        ");
-        $stmt->execute(['developer' => $developer]);
-        $data = $stmt->fetchAll(PDO::FETCH_GROUP);
-        // output
-        $o = '';
-        foreach($data as $console => $games) {
-            $o .= '<h2>'.$console.'</h2>';
-            foreach ($games AS $game) {
-                $o .= $this->game($game);
-            }
+    private function listCategory($table, $value) {
+        // NOTE: cannot bind table name part of query
+        // check table name is safe
+        $safeTables = ["series", "developer", "publisher", "console"];
+        if(array_search($table, $safeTables, true) === false) {
+            return '404';
         }
-        return $o;
-    }
-
-    private function listPublisher($publisher) {
         // query
-        $stmt = $this->database->get()->prepare("
+        $stmt = $this->database->get()->prepare('
             SELECT
-            console.name_long AS `console`,
             games.id,
             games.name_sort,
             games.name_nice
             FROM games.games
-            JOIN games.console ON console.id = games.console_id
-            JOIN games.publisher ON publisher.id = games.publisher_id
-            WHERE games.have_game = 1 AND publisher.name = :publisher
-            ORDER BY console.id, games.name_sort
-        ");
-        $stmt->execute(['publisher' => $publisher]);
-        $data = $stmt->fetchAll(PDO::FETCH_GROUP);
+            INNER JOIN games.'.$table.' ON '.$table.'.id = games.'.$table.'_id
+            WHERE games.have_game = 1 AND '.$table.'.name = :value
+            ORDER BY games.name_sort
+        ');
+        $stmt->execute(['value' => $value]);
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
         // output
-        $o = '';
-        foreach($data as $console => $games) {
-            $o .= '<h2>'.$console.'</h2>';
-            foreach ($games AS $game) {
-                $o .= $this->game($game);
-            }
-        }
-        return $o;
-    }
-
-    private function listConsole($console) {
-        // query
-        $stmt = $this->database->get()->prepare("
-            SELECT
-            console.name_long AS `console`,
-            games.id,
-            games.name_sort,
-            games.name_nice
-            FROM games.games
-            JOIN games.console ON console.id = games.console_id
-            WHERE games.have_game = 1 AND console.name_short = :console
-            ORDER BY console.id, games.name_sort
-        ");
-        $stmt->execute(['console' => $console]);
-        $data = $stmt->fetchAll(PDO::FETCH_GROUP);
-        // output
-        $o = '';
-        foreach($data as $console => $games) {
-            $o .= '<h2>'.$console.'</h2>';
-            foreach ($games AS $game) {
-                $o .= $this->game($game);
-            }
+        $o = '<h1>Games: '.ucfirst($table).': '.$value.'</h1>';
+        foreach($data as $game) {
+            $o .= $this->gameTile($game);
         }
         return $o;
     }
 
     private function listGenre($genre) {
         // query
-        $stmt = $this->database->get()->prepare("
+        $stmt = $this->database->get()->prepare('
             SELECT
-            console.name_long AS `console`,
+            console.name AS `console`,
             games.id,
             games.name_sort,
             games.name_nice
@@ -181,7 +128,7 @@ class Games {
             LEFT JOIN games.genre_joined AS `genre_sec` ON genre_sec.id1 = games.genre_id_sec
             WHERE games.have_game = 1 AND (genre_pri.name1 = :genre OR genre_pri.name2 = :genre OR genre_sec.name1 = :genre OR genre_sec.name2 = :genre)
             ORDER BY console.id, games.name_sort
-        ");
+        ');
         $stmt->execute(['genre' => $genre]);
         $data = $stmt->fetchAll(PDO::FETCH_GROUP);
         // output
@@ -189,7 +136,7 @@ class Games {
         foreach($data as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
             foreach ($games AS $game) {
-                $o .= $this->game($game);
+                $o .= $this->gameTile($game);
             }
         }
         return $o;
@@ -199,12 +146,12 @@ class Games {
         // query
         $data = $this->database->get()->query("
             SELECT
-            console.name_long AS `console`,
+            console.name AS `console`,
             games.id,
             games.name_sort,
             games.name_nice
             FROM games.games
-            JOIN games.console ON console.id = games.console_id
+            INNER JOIN games.console ON console.id = games.console_id
             WHERE games.have_game = 1
             ORDER BY console.id, games.name_sort
         ")->fetchAll(PDO::FETCH_GROUP);
@@ -213,16 +160,16 @@ class Games {
         foreach($data as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
             foreach ($games AS $game) {
-                $o .= $this->game($game);
+                $o .= $this->gameTile($game);
             }
         }
         return $o;
     }
 
-    private function game($game) {
+    private function gameTile($game) {
         $o = '';
         $o .= '<div>';
-        $o .= '<a href="/games/game/'.$game['name_sort'].'/">';
+        $o .= '<a href="/games/'.$game['name_sort'].'/">';
         $o .= '<img src="/games/'.$game['id'].'/cover.jpg" height="280" width="280"><br>';
         $o .= $game['name_nice'];
         $o .= '</a>';

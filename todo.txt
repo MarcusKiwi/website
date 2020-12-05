@@ -1,11 +1,6 @@
 ==== games ====
-list for genre
-list for console
-list for developer
-list for publisher
+improve list for genre
 want list
-console order field
-console description field
 
 ==== content ====
 system specs
