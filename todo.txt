@@ -10,6 +10,3 @@ console description field
 ==== content ====
 system specs
 diecast cars
-
-==== site ====
-page routing
