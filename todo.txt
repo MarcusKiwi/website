@@ -1,8 +1,6 @@
 ==== games ====
-improve list for genre
-list for each category
+list game by genre
 check for results in requests
-want list
 
 ==== content ====
 system specs
