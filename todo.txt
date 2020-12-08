@@ -1,7 +1,13 @@
 ==== games ====
-list game by genre
-check for results in requests
+list games by genre
+list games in genre
+list games by year
+support multiple images per game
 
 ==== content ====
 system specs
 diecast cars
+file hosting
+
+==== website ====
+user module

@@ -12,10 +12,11 @@ class Games {
         $o = '
             <br>
             <a href="/games/wanted/">wanted</a>
-            <a href="/games/series/">series</a>
-            <a href="/games/developer/">developer</a>
             <a href="/games/console/">console</a>
             <a href="/games/genre/">genre</a>
+            <a href="/games/series/">series</a>
+            <a href="/games/developer/">developer</a>
+            <a href="/games/publisher/">publisher</a>
             <br>
         ';
         $o .= $this->route($path);
@@ -60,16 +61,20 @@ class Games {
         $stmt = $this->database->get()->query('
             SELECT
             console.name,
-            games.name_nice
-            FROM games.games
-            INNER JOIN games.console ON console.id = games.console_id
-            WHERE games.have_game = 0
-            ORDER BY console.id, games.name_sort
+            game.name_nice
+            FROM games.game
+            INNER JOIN games.console ON console.id = game.console_id
+            WHERE game.have_game = 0
+            ORDER BY console.id, game.name_sort
         ');
+        // check sql fail
+        if($stmt===false) {
+            return 401;
+        }
         $data = $stmt->fetchAll(PDO::FETCH_GROUP);
+        // check result count: not applicable
         // output
-        $o = '';
-        $o .= '<h1>Games: Wanted</h1>';
+        $o = '<h1>Games: Wanted</h1>';
         foreach($data as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
             foreach($games as $game) {
@@ -90,23 +95,28 @@ class Games {
         $stmt = '
             SELECT
             '.$table.'.name AS `'.$table.'`,
-            games.id,
-            games.name_sort,
-            games.name_nice
-            FROM games.games
-            INNER JOIN games.'.$table.' ON '.$table.'.id = games.'.$table.'_id
-            WHERE games.have_game = 1
+            game.id,
+            game.name_sort,
+            game.name_nice
+            FROM games.game
+            INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+            WHERE game.have_game = 1
         ';
         if($table==='console') {
-            $stmt .= 'ORDER BY console.id, games.name_sort';
+            $stmt .= 'ORDER BY console.id, game.name_sort';
         } else {
-            $stmt .= 'ORDER BY ' . $table . '.name, games.name_sort';
+            $stmt .= 'ORDER BY ' . $table . '.name, game.name_sort';
         }
-        $data = $this->database->get()->query($stmt);
-        if($data===false) {
+        $stmt = $this->database->get()->query($stmt);
+        // check sql statement fail
+        if($stmt===false) {
             return 401;
         }
-        $data = $data->fetchAll(PDO::FETCH_GROUP);
+        $data = $stmt->fetchAll(PDO::FETCH_GROUP);
+        // check result count
+        if(count($data) < 1) {
+            return 404;
+        }
         // output
         $o = '';
         foreach($data as $console => $games) {
@@ -128,16 +138,20 @@ class Games {
         // query
         $stmt = $this->database->get()->prepare('
             SELECT
-            games.id,
-            games.name_sort,
-            games.name_nice
-            FROM games.games
-            INNER JOIN games.'.$table.' ON '.$table.'.id = games.'.$table.'_id
-            WHERE games.have_game = 1 AND '.$table.'.name = :value
-            ORDER BY games.name_sort
+            game.id,
+            game.name_sort,
+            game.name_nice
+            FROM games.game
+            INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+            WHERE game.have_game = 1 AND '.$table.'.name = :value
+            ORDER BY game.name_sort
         ');
         $stmt->execute(['value' => $value]);
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // check result count
+        if(count($data) < 1) {
+            return 404;
+        }
         // output
         $o = '<h1>Games: '.ucfirst($table).': '.$value.'</h1>';
         foreach($data as $game) {
@@ -152,78 +166,73 @@ class Games {
     }
 
     private function showGenre($genre) {
-        // query
-        $stmt = $this->database->get()->prepare('
-            SELECT
-            games.id,
-            games.name_sort,
-            games.name_nice
-            FROM games.games
-            INNER JOIN games.genre AS `genre_pri` ON genre_pri.id = games.genre_id_pri
-            LEFT JOIN games.genre AS `genre_sec` ON genre_sec.id = games.genre_id_sec
-            WHERE games.have_game = 1 AND (genre_pri.name = :genre OR genre_sec.name = :genre)
-            ORDER BY games.name_sort
-        ');
-        $stmt->execute(['genre' => $genre]);
-        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        // output
-        $o = '';
-        $o .= '<h1>Games: Genre: '.$genre.'</h1>';
-        foreach($data as $game) {
-            $o .= $this->gameTile($game);
-        }
-        return $o;
+        // TODO
+        return 401;
     }
 
     private function showGame($name) {
-        // query
+        // query game data
         $stmt = $this->database->get()->prepare('
             SELECT 
-            games.id,
-            games.name_official,
-            games.name_nice,
-            games.rating,
-            games.description_public,
-            games.release_date,
-            games.release_year,
-            games.series.name AS `series_name`,
-            games.developer.name AS `developer_name`,
-            games.publisher.name AS `publisher_name`,
-            games.console.name AS `console_name`,
-            genre_pri.name AS `genre_name_pri`,
-            genre_sec.name AS `genre_name_sec`
-            FROM games.games
-            LEFT JOIN games.source ON source.id = games.purchase_source_id
-            LEFT JOIN games.series ON games.series.id = games.series_id
-            INNER JOIN games.developer ON games.developer.id = games.developer_id
-            INNER JOIN games.publisher ON games.publisher.id = games.publisher_id
-            INNER JOIN games.console ON games.console.id = games.console_id
-            INNER JOIN games.genre AS `genre_pri` ON genre_pri.id = games.genre_id_pri
-            LEFT JOIN games.genre AS `genre_sec` ON genre_sec.id = games.genre_id_sec
-            WHERE games.name_sort = :name
-            ORDER BY games.name_sort
+            game.id,
+            game.name_official,
+            game.name_nice,
+            game.rating,
+            game.about,
+            game.release_date,
+            series.name AS `series_name`,
+            developer.name AS `developer_name`,
+            publisher.name AS `publisher_name`,
+            console.name AS `console_name`
+            FROM games.game
+            LEFT JOIN games.series ON series.id = game.series_id
+            INNER JOIN games.developer ON developer.id = game.developer_id
+            INNER JOIN games.publisher ON publisher.id = game.publisher_id
+            INNER JOIN games.console ON console.id = game.console_id
+            WHERE game.name_sort = :name
+            LIMIT 1
         ');
         $stmt->execute(['name' => $name]);
-        $game = $stmt->fetchAll()[0];
+        $gameData = $stmt->fetchAll();
+        // check result count
+        if(count($gameData) !== 1) {
+            return 404;
+        }
+        $gameData = $gameData[0];
+        // query genre data
+        $stmt = $this->database->get()->prepare('
+            SELECT 
+            genre.name
+            FROM games.game_genre
+            LEFT JOIN games.genre ON genre.id = game_genre.genre_id
+            WHERE game_genre.game_id = :game_id
+            ORDER BY game_genre.id
+        ');
+        $stmt->execute(['game_id' => $gameData['id']]);
+        $genreData = $stmt->fetchAll();
+        // check result count
+        if(count($genreData) < 1) {
+            return 401;
+        }
         // create genre string
-        $genre = '<a href="/games/genre/'.$game['genre_name_pri'].'/">'.$game['genre_name_pri'].'</a>';
-        if($game['genre_name_sec']!==null) {
-            $genre .= ' &amp; <a href="/games/genre/'.$game['genre_name_sec'].'/">'.$game['genre_name_sec'].'</a>';
+        $genreString = "";
+        foreach($genreData as $genre) {
+            $genreString .= '<a href="/games/genre/'.$genre['name'].'/">'.$genre['name'].'</a> ';
         }
         // output
-        $o = '';
-        $o .= '<h1>'.$game['name_nice'].'</h1>';
-        $o .= '<p><img src="/games/'.$game['id'].'/cover.jpg" height="280" width="280"></p>';
+        $o = '<h1>'.$gameData['name_nice'].'</h1>';
+        $o .= '<p><img src="/games/'.$gameData['id'].'/cover.jpg" height="280" width="280"></p>';
         $o .= '<table>';
-        $o .= '<tr><td>Official Title</td><td>'.$game['name_official'].'</td></tr>';
-        $o .= '<tr><td>Rating</td><td>'.$game['rating'].'</td></tr>';
-        $o .= '<tr><td>Genre</td><td>'.$genre.'</td></tr>';
-        $o .= '<tr><td>Series</td><td><a href="/games/series/'.$game['series_name'].'/">'.$game['series_name'].'</a></td></tr>';
-        $o .= '<tr><td>Developer</td><td><a href="/games/developer/'.$game['developer_name'].'/">'.$game['developer_name'].'</td></tr>';
-        $o .= '<tr><td>Publisher </td><td><a href="/games/publisher/'.$game['publisher_name'].'/">'.$game['publisher_name'].'</td></tr>';
-        $o .= '<tr><td>Console</td><td><a href="/games/console/'.$game['console_name'].'/">'.$game['console_name'].'</td></tr>';
+        $o .= '<tr><td>Official Title</td><td>'.$gameData['name_official'].'</td></tr>';
+        $o .= '<tr><td>Rating</td><td>'.$gameData['rating'].'</td></tr>';
+        $o .= '<tr><td>Release Date</td><td>'.date_format(date_create($gameData['release_date']), 'j M Y').'</td></tr>';
+        $o .= '<tr><td>Genre</td><td>'.$genreString.'</td></tr>';
+        $o .= '<tr><td>Series</td><td><a href="/games/series/'.$gameData['series_name'].'/">'.$gameData['series_name'].'</a></td></tr>';
+        $o .= '<tr><td>Developer</td><td><a href="/games/developer/'.$gameData['developer_name'].'/">'.$gameData['developer_name'].'</td></tr>';
+        $o .= '<tr><td>Publisher </td><td><a href="/games/publisher/'.$gameData['publisher_name'].'/">'.$gameData['publisher_name'].'</td></tr>';
+        $o .= '<tr><td>Console</td><td><a href="/games/console/'.$gameData['console_name'].'/">'.$gameData['console_name'].'</td></tr>';
         $o .= '</table>';
-        $o .= '<p>About: '.$game['description_public'].'</p>';
+        $o .= '<p>About: '.$gameData['about'].'</p>';
         return $o;
     }
 
