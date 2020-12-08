@@ -17,10 +17,10 @@
 
 // get url path
 $path = explode('/', urldecode(parse_url($_SERVER['REQUEST_URI'])['path']));
-if($path[0]=="") {
+if($path[0] == "") {
     array_shift($path);
 }
-if($path[count($path)-1]=="") {
+if($path[count($path) - 1] == "") {
     array_pop($path);
 }
 
@@ -31,7 +31,7 @@ require_once("games.php");
 
 // route & run component
 if(isset($path[0])) {
-    if($path[0]=="games") {
+    if($path[0] == "games") {
         $games = new Games($path);
         echo $games->makePage($path);
     }

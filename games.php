@@ -1,14 +1,17 @@
 <?php
 
-class Games {
+class Games
+{
 
     private $database;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->database = new Database();
     }
 
-    public function makePage($path) {
+    public function makePage($path)
+    {
         $o = '
             <br>
             <a href="/games/wanted/">wanted</a>
@@ -23,11 +26,12 @@ class Games {
         return $o;
     }
 
-    private function route($path) {
-        if(count($path)==1) {
+    private function route($path)
+    {
+        if(count($path) == 1) {
             return $this->listCategory('console');
         }
-        if(count($path)==2) {
+        if(count($path) == 2) {
             switch($path[1]) {
                 case "wanted":
                     return $this->listWanted();
@@ -35,28 +39,27 @@ class Games {
                 case "developer":
                 case "publisher":
                 case "console":
-                    return $this->listCategory($path[1]);
                 case "genre":
-                    return $this->listGenre();
+                    return $this->listCategory($path[1]);
                 default:
                     return $this->showGame($path[1]);
             }
         }
-        if(count($path)==3) {
+        if(count($path) == 3) {
             switch($path[1]) {
                 case "series":
                 case "developer":
                 case "publisher":
                 case "console":
-                    return $this->showCategory($path[1], $path[2]);
                 case "genre":
-                    return $this->showGenre($path[2]);
+                    return $this->showCategory($path[1], $path[2]);
             }
         }
         return 404;
     }
 
-    private function listWanted() {
+    private function listWanted()
+    {
         // query
         $stmt = $this->database->get()->query('
             SELECT
@@ -68,7 +71,7 @@ class Games {
             ORDER BY console.id, game.name_sort
         ');
         // check sql fail
-        if($stmt===false) {
+        if($stmt === false) {
             return 401;
         }
         $data = $stmt->fetchAll(PDO::FETCH_GROUP);
@@ -78,38 +81,50 @@ class Games {
         foreach($data as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
             foreach($games as $game) {
-                $o .= $game['name_nice'] . '<br>';
+                $o .= $game['name_nice'].'<br>';
             }
         }
         return $o;
     }
 
-    private function listCategory($table) {
+    private function listCategory($table)
+    {
         // NOTE: cannot bind table name part of query
         // check table name is safe
-        $safeTables = ["series", "developer", "publisher", "console"];
+        $safeTables = ["series", "developer", "publisher", "console", "genre"];
         if(array_search($table, $safeTables, true) === false) {
             return 401;
         }
         // query
-        $stmt = '
+        $stmtColumns = '
             SELECT
             '.$table.'.name AS `'.$table.'`,
             game.id,
             game.name_sort,
             game.name_nice
-            FROM games.game
-            INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
-            WHERE game.have_game = 1
         ';
-        if($table==='console') {
-            $stmt .= 'ORDER BY console.id, game.name_sort';
+        if($table == 'genre') {
+            $stmtTables = '
+                FROM games.game_genre
+                INNER JOIN games.game ON game.id = game_genre.game_id
+                INNER JOIN games.genre ON genre.id = game_genre.genre_id
+            ';
         } else {
-            $stmt .= 'ORDER BY ' . $table . '.name, game.name_sort';
+            $stmtTables = '
+                FROM games.game
+                INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+            ';
         }
+        $stmtWhere = 'WHERE game.have_game = 1 ';
+        if($table === 'console') {
+            $stmtOrder = 'ORDER BY console.id, game.name_sort';
+        } else {
+            $stmtOrder = 'ORDER BY '.$table.'.name, game.name_sort';
+        }
+        $stmt = $stmtColumns.$stmtTables.$stmtWhere.$stmtOrder;
         $stmt = $this->database->get()->query($stmt);
         // check sql statement fail
-        if($stmt===false) {
+        if($stmt === false) {
             return 401;
         }
         $data = $stmt->fetchAll(PDO::FETCH_GROUP);
@@ -121,31 +136,46 @@ class Games {
         $o = '';
         foreach($data as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
-            foreach ($games AS $game) {
+            foreach($games AS $game) {
                 $o .= $this->gameTile($game);
             }
         }
         return $o;
     }
 
-    private function showCategory($table, $value) {
+    private function showCategory($table, $value)
+    {
         // NOTE: cannot bind table name part of query
         // check table name is safe
-        $safeTables = ["series", "developer", "publisher", "console"];
+        $safeTables = ["series", "developer", "publisher", "console", "genre"];
         if(array_search($table, $safeTables, true) === false) {
             return 401;
         }
         // query
-        $stmt = $this->database->get()->prepare('
+        $stmtColumns = '
             SELECT
             game.id,
             game.name_sort,
             game.name_nice
-            FROM games.game
-            INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+        ';
+        if($table == 'genre') {
+            $stmtTables = '
+                FROM games.game_genre
+                INNER JOIN games.game ON game.id = game_genre.game_id
+                INNER JOIN games.genre ON genre.id = game_genre.genre_id
+            ';
+        } else {
+            $stmtTables = '
+                FROM games.game
+                INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+            ';
+        }
+        $stmtWhereOrder = '
             WHERE game.have_game = 1 AND '.$table.'.name = :value
             ORDER BY game.name_sort
-        ');
+        ';
+        $stmt = $stmtColumns.$stmtTables.$stmtWhereOrder;
+        $stmt = $this->database->get()->prepare($stmt);
         $stmt->execute(['value' => $value]);
         $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
         // check result count
@@ -160,17 +190,8 @@ class Games {
         return $o;
     }
 
-    private function listGenre() {
-        // TODO
-        return 401;
-    }
-
-    private function showGenre($genre) {
-        // TODO
-        return 401;
-    }
-
-    private function showGame($name) {
+    private function showGame($name)
+    {
         // query game data
         $stmt = $this->database->get()->prepare('
             SELECT 
@@ -236,7 +257,8 @@ class Games {
         return $o;
     }
 
-    private function gameTile($game) {
+    private function gameTile($game)
+    {
         $o = '';
         $o .= '<div><a href="/games/'.$game['name_sort'].'/">';
         $o .= '<img src="/games/'.$game['id'].'/cover.jpg" height="280" width="280"><br>';

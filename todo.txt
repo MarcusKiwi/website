@@ -1,6 +1,4 @@
 ==== games ====
-list games by genre
-list games in genre
 list games by year
 support multiple images per game
 
