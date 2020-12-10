@@ -10,49 +10,50 @@ class Games
         $this->database = new Database();
     }
 
-    public function makePage($path)
+    public function run($path)
     {
         $o = '
             <br>
             <a href="/games/wanted/">wanted</a>
             <a href="/games/console/">console</a>
-            <a href="/games/genre/">genre</a>
-            <a href="/games/series/">series</a>
             <a href="/games/developer/">developer</a>
             <a href="/games/publisher/">publisher</a>
+            <a href="/games/series/">series</a>
+            <a href="/games/genre/">genre</a>
+            <a href="/games/release/">release</a>
             <br>
         ';
-        $o .= $this->route($path);
+        $o .= $this->makePage($path);
         return $o;
     }
 
-    private function route($path)
+    private function makePage($path)
     {
         if(count($path) == 1) {
             return $this->listCategory('console');
-        }
-        if(count($path) == 2) {
+        } else if(count($path) == 2) {
             switch($path[1]) {
                 case "wanted":
                     return $this->listWanted();
-                case "series":
+                case "console":
                 case "developer":
                 case "publisher":
-                case "console":
+                case "series":
                 case "genre":
+                case "release":
                     return $this->listCategory($path[1]);
                 default:
                     return $this->showGame($path[1]);
             }
-        }
-        if(count($path) == 3) {
+        } else if(count($path) == 3) {
             switch($path[1]) {
-                case "series":
+                case "console":
                 case "developer":
                 case "publisher":
-                case "console":
+                case "series":
                 case "genre":
-                    return $this->showCategory($path[1], $path[2]);
+                case "release":
+                    return $this->listSubCategory($path[1], $path[2]);
             }
         }
         return 404;
@@ -61,24 +62,24 @@ class Games
     private function listWanted()
     {
         // query
-        $stmt = $this->database->get()->query('
+        $sql = $this->database->get()->query('
             SELECT
             console.name,
             game.name_nice
             FROM games.game
             INNER JOIN games.console ON console.id = game.console_id
             WHERE game.have_game = 0
-            ORDER BY console.id, game.name_sort
+            ORDER BY console.id ASC, game.name_sort ASC
         ');
         // check sql fail
-        if($stmt === false) {
-            return 401;
-        }
-        $data = $stmt->fetchAll(PDO::FETCH_GROUP);
-        // check result count: not applicable
+        if($sql === false) return 401;
+        $sql = $sql->fetchAll(PDO::FETCH_GROUP);
         // output
         $o = '<h1>Games: Wanted</h1>';
-        foreach($data as $console => $games) {
+        if(count($sql) < 1) {
+            return $o."<p>None!</p>";
+        }
+        foreach($sql as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
             foreach($games as $game) {
                 $o .= $game['name_nice'].'<br>';
@@ -87,54 +88,61 @@ class Games
         return $o;
     }
 
-    private function listCategory($table)
+    private function listCategory($category)
     {
-        // NOTE: cannot bind table name part of query
-        // check table name is safe
-        $safeTables = ["series", "developer", "publisher", "console", "genre"];
-        if(array_search($table, $safeTables, true) === false) {
-            return 401;
+        // check category is valid
+        $safe = ["console", "developer", "publisher", "series", "genre", "release"];
+        if(array_search($category, $safe, true) === false) return 401;
+        // build query
+        $sql = 'SELECT ';
+        if($category === 'release') {
+            $sql .= 'YEAR(game.release_date) AS `release_year`,';
+        } else {
+            $sql .= $category.'.name AS `'.$category.'`,';
         }
-        // query
-        $stmtColumns = '
-            SELECT
-            '.$table.'.name AS `'.$table.'`,
+        $sql .= '
             game.id,
             game.name_sort,
             game.name_nice
         ';
-        if($table == 'genre') {
-            $stmtTables = '
+        if($category === 'release') {
+            $sql .= '
+                FROM games.game
+            ';
+        } else if($category === 'genre') {
+            $sql .= '
                 FROM games.game_genre
                 INNER JOIN games.game ON game.id = game_genre.game_id
                 INNER JOIN games.genre ON genre.id = game_genre.genre_id
             ';
         } else {
-            $stmtTables = '
+            $sql .= '
                 FROM games.game
-                INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+                INNER JOIN games.'.$category.' ON '.$category.'.id = game.'.$category.'_id
             ';
         }
-        $stmtWhere = 'WHERE game.have_game = 1 ';
-        if($table === 'console') {
-            $stmtOrder = 'ORDER BY console.id, game.name_sort';
+        $sql .= 'WHERE game.have_game = 1 ';
+        if($category === 'release') {
+            $sql .= '
+                ORDER BY YEAR(game.release_date), game.release_date
+            ';
+        } else if($category === 'console') {
+            $sql .= '
+                ORDER BY console.id ASC, game.name_sort ASC
+            ';
         } else {
-            $stmtOrder = 'ORDER BY '.$table.'.name, game.name_sort';
+            $sql .= '
+                ORDER BY '.$category.'.name ASC, game.name_sort ASC
+            ';
         }
-        $stmt = $stmtColumns.$stmtTables.$stmtWhere.$stmtOrder;
-        $stmt = $this->database->get()->query($stmt);
-        // check sql statement fail
-        if($stmt === false) {
-            return 401;
-        }
-        $data = $stmt->fetchAll(PDO::FETCH_GROUP);
-        // check result count
-        if(count($data) < 1) {
-            return 404;
-        }
+        // run query
+        $sql = $this->database->get()->query($sql);
+        if($sql === false) return 401;
+        $sql = $sql->fetchAll(PDO::FETCH_GROUP);
+        if(count($sql) < 1) return 404;
         // output
         $o = '';
-        foreach($data as $console => $games) {
+        foreach($sql as $console => $games) {
             $o .= '<h2>'.$console.'</h2>';
             foreach($games AS $game) {
                 $o .= $this->gameTile($game);
@@ -143,48 +151,47 @@ class Games
         return $o;
     }
 
-    private function showCategory($table, $value)
+    private function listSubCategory($category, $subCategory)
     {
-        // NOTE: cannot bind table name part of query
-        // check table name is safe
-        $safeTables = ["series", "developer", "publisher", "console", "genre"];
-        if(array_search($table, $safeTables, true) === false) {
-            return 401;
-        }
-        // query
-        $stmtColumns = '
+        // check category is valid
+        $safe = ["console", "developer", "publisher", "series", "genre", "release"];
+        if(array_search($category, $safe, true) === false) return 401;
+        // build query
+        $sql = '
             SELECT
             game.id,
             game.name_sort,
             game.name_nice
         ';
-        if($table == 'genre') {
-            $stmtTables = '
+        if($category == 'release') {
+            $sql .= '
+                FROM games.game
+                WHERE game.have_game = 1 AND YEAR(game.release_date) = :subCategory
+            ';
+        } else if($category == 'genre') {
+            $sql .= '
                 FROM games.game_genre
                 INNER JOIN games.game ON game.id = game_genre.game_id
                 INNER JOIN games.genre ON genre.id = game_genre.genre_id
+                WHERE game.have_game = 1 AND '.$category.'.name = :subCategory
             ';
         } else {
-            $stmtTables = '
+            $sql .= '
                 FROM games.game
-                INNER JOIN games.'.$table.' ON '.$table.'.id = game.'.$table.'_id
+                INNER JOIN games.'.$category.' ON '.$category.'.id = game.'.$category.'_id
+                WHERE game.have_game = 1 AND '.$category.'.name = :subCategory
             ';
         }
-        $stmtWhereOrder = '
-            WHERE game.have_game = 1 AND '.$table.'.name = :value
-            ORDER BY game.name_sort
-        ';
-        $stmt = $stmtColumns.$stmtTables.$stmtWhereOrder;
-        $stmt = $this->database->get()->prepare($stmt);
-        $stmt->execute(['value' => $value]);
-        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        // check result count
-        if(count($data) < 1) {
-            return 404;
-        }
+        $sql .= 'ORDER BY game.name_sort ASC';
+        // run query
+        $sql = $this->database->get()->prepare($sql);
+        $sql->execute(['subCategory' => $subCategory]);
+        if($sql === false) return 401;
+        $sql = $sql->fetchAll(PDO::FETCH_ASSOC);
         // output
-        $o = '<h1>Games: '.ucfirst($table).': '.$value.'</h1>';
-        foreach($data as $game) {
+        if(count($sql) < 1) return 404;
+        $o = '<h1>Games: '.ucfirst($category).': '.$subCategory.'</h1>';
+        foreach($sql as $game) {
             $o .= $this->gameTile($game);
         }
         return $o;
@@ -193,7 +200,7 @@ class Games
     private function showGame($name)
     {
         // query game data
-        $stmt = $this->database->get()->prepare('
+        $sql = $this->database->get()->prepare('
             SELECT 
             game.id,
             game.name_official,
@@ -213,15 +220,13 @@ class Games
             WHERE game.name_sort = :name
             LIMIT 1
         ');
-        $stmt->execute(['name' => $name]);
-        $gameData = $stmt->fetchAll();
-        // check result count
-        if(count($gameData) !== 1) {
-            return 404;
-        }
-        $gameData = $gameData[0];
+        $sql->execute(['name' => $name]);
+        if($sql === false) return 401;
+        $sql = $sql->fetchAll();
+        if(count($sql) !== 1) return 404;
+        $gameData = $sql[0];
         // query genre data
-        $stmt = $this->database->get()->prepare('
+        $sql = $this->database->get()->prepare('
             SELECT 
             genre.name
             FROM games.game_genre
@@ -229,24 +234,27 @@ class Games
             WHERE game_genre.game_id = :game_id
             ORDER BY game_genre.id
         ');
-        $stmt->execute(['game_id' => $gameData['id']]);
-        $genreData = $stmt->fetchAll();
-        // check result count
-        if(count($genreData) < 1) {
-            return 401;
-        }
+        $sql->execute(['game_id' => $gameData['id']]);
+        if($sql === false) return 401;
+        $genreData = $sql->fetchAll();
+        if(count($genreData) < 1) return 401;
         // create genre string
-        $genreString = "";
+        $genreString = '';
         foreach($genreData as $genre) {
             $genreString .= '<a href="/games/genre/'.$genre['name'].'/">'.$genre['name'].'</a> ';
         }
+        // create release date string
+        $releaseDate = date_format(date_create($gameData['release_date']), 'j M');
+        $releaseDate .= ' <a href="/games/release/'.date_format(date_create($gameData['release_date']), 'Y').'">';
+        $releaseDate .= date_format(date_create($gameData['release_date']), 'Y');
+        $releaseDate .= '</a>';
         // output
         $o = '<h1>'.$gameData['name_nice'].'</h1>';
         $o .= '<p><img src="/games/'.$gameData['id'].'/cover.jpg" height="280" width="280"></p>';
         $o .= '<table>';
         $o .= '<tr><td>Official Title</td><td>'.$gameData['name_official'].'</td></tr>';
         $o .= '<tr><td>Rating</td><td>'.$gameData['rating'].'</td></tr>';
-        $o .= '<tr><td>Release Date</td><td>'.date_format(date_create($gameData['release_date']), 'j M Y').'</td></tr>';
+        $o .= '<tr><td>Release Date</td><td>'.$releaseDate.'</td></tr>';
         $o .= '<tr><td>Genre</td><td>'.$genreString.'</td></tr>';
         $o .= '<tr><td>Series</td><td><a href="/games/series/'.$gameData['series_name'].'/">'.$gameData['series_name'].'</a></td></tr>';
         $o .= '<tr><td>Developer</td><td><a href="/games/developer/'.$gameData['developer_name'].'/">'.$gameData['developer_name'].'</td></tr>';

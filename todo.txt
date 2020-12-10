@@ -1,11 +1,17 @@
 ==== games ====
-list games by year
 support multiple images per game
+admin: manage games
 
 ==== content ====
 system specs
 diecast cars
 file hosting
+bike rides
 
 ==== website ====
 user module
+css
+
+done:
+sql failure checks
+list games by year
